@@ -3,6 +3,7 @@ package handler
 import (
 	"app/internal/domain"
 	"app/internal/product"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -15,6 +16,9 @@ type ProductHandler struct {
 }
 
 type BodyRequestCreate struct {
+	domain.AtributtesProduct
+}
+type BodyRequestUpdate struct {
 	domain.AtributtesProduct
 }
 
@@ -32,6 +36,7 @@ func (p *ProductHandler) ProductRoutes() {
 	p.productGroup.GET("/", p.GetAllProducts())
 	p.productGroup.GET("/:id", p.GetByID())
 	p.productGroup.POST("/", p.CreateProduct())
+	p.productGroup.PUT("/:id", p.UpdateProduct())
 }
 
 // GetAllProducts returns a Gin handler function that handles the GET request for retrieving all products.
@@ -66,6 +71,11 @@ func (p *ProductHandler) GetByID() gin.HandlerFunc {
 // Upon successful creation, it returns a 200 OK response with the created product.
 func (p *ProductHandler) CreateProduct() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		token := ctx.GetHeader("Authorization")
+		if token == "" {
+			ctx.JSON(http.StatusUnauthorized, "Unauthorized")
+			return
+		}
 		var body BodyRequestCreate
 		err := ctx.ShouldBind(&body)
 		if err != nil {
@@ -75,7 +85,79 @@ func (p *ProductHandler) CreateProduct() gin.HandlerFunc {
 		product := domain.Product{
 			AtributtesProduct: body.AtributtesProduct,
 		}
-		p.service.CreateProduct(product)
-		ctx.JSON(http.StatusOK, product)
+		validate, err := ValidateAtributtes(product)
+		if !validate {
+			ctx.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+
+		product = p.service.CreateProduct(product)
+		ctx.JSON(http.StatusCreated, gin.H{"message": "Products created successfully",
+			"data": product,
+		})
 	}
+}
+
+// UpdateProduct is a handler function that updates a product.
+// If the request is valid, the product is updated and the updated product is returned in the response.
+// If any errors occur during the update process, an appropriate error response is returned.
+func (p *ProductHandler) UpdateProduct() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+
+		token := ctx.GetHeader("Authorization")
+		if token == "" {
+			ctx.JSON(http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		var body BodyRequestUpdate
+		err := ctx.ShouldBind(&body)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+		IntId, err := strconv.Atoi(ctx.Param("id"))
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+		product := domain.Product{
+			ID:                IntId,
+			AtributtesProduct: body.AtributtesProduct,
+		}
+		validate, err := ValidateAtributtes(product)
+		if !validate {
+			ctx.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+		product, err = p.service.UpdateProduct(product)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+		ctx.JSON(http.StatusCreated, gin.H{"message": "Products updated successfully",
+			"data": product,
+		})
+	}
+}
+
+func ValidateAtributtes(product domain.Product) (validate bool, err error) {
+	if product.Name == "" {
+		return false, errors.New("Name is required")
+	}
+	if product.Price == 0 {
+		return false, errors.New("Price is required")
+	}
+	if product.Quantity == 0 {
+		return false, errors.New("Quantity is required")
+	}
+	if product.Code_value == "" {
+		return false, errors.New("Description is required")
+	}
+	if product.Expiration == "" {
+		return false, errors.New("Expiration is required")
+	}
+	if product.IsPublished == nil {
+		return false, errors.New("IsPublished is required")
+	}
+	return true, nil
 }

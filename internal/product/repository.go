@@ -38,3 +38,17 @@ func (p *ProductRepository) GetByID(id int) domain.Product {
 func (p *ProductRepository) Create(product domain.Product) {
 	p.ProductRepository = append(p.ProductRepository, product)
 }
+
+// Update updates the product with the given ID in the repository.
+// It replaces the existing product with the new product provided.
+// If the product with the given ID is not found, it returns an empty product and no error.
+func (p *ProductRepository) Update(product domain.Product) (pr domain.Product, err error) {
+	for i, prod := range p.ProductRepository {
+		if prod.ID == product.ID {
+			p.ProductRepository[i] = product
+			prod = product
+			return
+		}
+	}
+	return
+}
